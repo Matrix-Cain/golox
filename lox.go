@@ -60,6 +60,7 @@ func run(source string) {
 	}
 }
 
+// TODO: change error() to a more appropriate name and maybe enhance error message
 func error(line int, message string) {
 	report(line, "", message)
 }

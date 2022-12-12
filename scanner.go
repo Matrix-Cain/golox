@@ -91,6 +91,17 @@ func (t *Scanner) scanToken() {
 			for t.peek() != "\n" && !t.isAtEnd() {
 				t.advance()
 			}
+		} else if t.match("*") {
+			for !t.isAtEnd() {
+				if t.peek() == "*" {
+					t.advance()
+					if t.match("/") {
+						break
+					}
+				} else {
+					t.advance()
+				}
+			}
 		} else {
 			t.addToken(SLASH)
 		}

@@ -32,5 +32,5 @@ func TestAST_Printer_RPN(t *testing.T) {
 	fmt.Println()
 	fmt.Println(str.(string))
 	fmt.Println()
-	//assert.Equal(t, "1 2 + 4 3 - *", str.(string))
+	assert.Equal(t, "1 2 + 4 3 - *", str.(string))
 }

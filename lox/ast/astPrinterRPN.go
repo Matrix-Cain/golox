@@ -1,6 +1,16 @@
 package ast
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
+
+//将一般表达式转换成逆波兰式
+//一般表达式	                    逆波兰式
+//  E        （若为常数或变量）	E
+//（E）	                        E的逆波兰式
+// E1 op E2 （二元运算）	        E1的逆波兰式 E2的逆波兰式 op
+// op E     （一元运算）	        E的逆波兰式 op
 
 type AstPrinterRPN struct{}
 
@@ -27,6 +37,9 @@ func (a *AstPrinterRPN) VisitLiteralExpr(expr *Literal) (interface{}, error) {
 }
 
 func (a *AstPrinterRPN) VisitUnaryExpr(expr *Unary) (interface{}, error) {
+	if expr.Operator.Lexeme == "-" {
+		return a.parenthesize("~", expr.Right), nil // handle special case where Negate and Minus conflict or say ambiguous
+	}
 	return a.parenthesize(expr.Operator.Lexeme, expr.Right), nil
 }
 
@@ -36,18 +49,19 @@ func (a *AstPrinterRPN) parenthesize(name string, exprs ...Expr) string {
 		str, _ := expr.Accept(a)
 		switch v := str.(type) {
 		case string:
-			tmpStr += v
+			tmpStr += v + " "
 		case int:
-			tmpStr += strconv.Itoa(v)
+			tmpStr += strconv.Itoa(v) + " "
 		case float64:
-			tmpStr += strconv.FormatFloat(v, 'f', -1, 64)
+			tmpStr += strconv.FormatFloat(v, 'f', -1, 64) + " "
 		case float32:
-			tmpStr += strconv.FormatFloat(float64(v), 'f', -1, 32)
+			tmpStr += strconv.FormatFloat(float64(v), 'f', -1, 32) + " "
 		}
-		if name != "group" {
-			tmpStr += " " + name + " "
-		}
-
+	}
+	if name != "group" {
+		tmpStr += name
+	} else {
+		tmpStr = strings.TrimRight(tmpStr, " ")
 	}
 	return tmpStr
 }

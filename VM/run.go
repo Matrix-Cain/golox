@@ -3,7 +3,10 @@ package VM
 import (
 	"bufio"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"golox/lox/ast"
 	"golox/lox/lexer"
+	"golox/lox/parser"
 	"golox/utils"
 	"os"
 )
@@ -50,17 +53,27 @@ func (v *VM) RunPrompt() {
 
 func (v *VM) run(source string) {
 	scanner := lexer.NewScanner(source)
-	tokens, err := scanner.ScanTokens()
-	if err.HasError {
-		utils.RaiseError(err.Line, err.Reason)
+	tokens, lexerError := scanner.ScanTokens()
+	if lexerError.HasError {
+		utils.RaiseError(lexerError.Line, lexerError.Reason)
 		v.hadError = true
 	}
 
-	// For now, just print the tokens.
-	for _, v := range tokens {
-		fmt.Println(v)
-		//log.Info(v)
+	parser0 := parser.NewParser(tokens)
+	expression, parseError := parser0.Parse()
+
+	if parseError.HasError {
+		v.hadError = true
 	}
+
+	if v.hadError {
+		return
+	}
+	printer := ast.AstPrinter{}
+	str, _ := printer.Print(expression)
+
+	log.Println(str.(string))
+
 }
 
 func (v *VM) SetError(error bool) {

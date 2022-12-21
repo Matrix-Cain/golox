@@ -1,10 +1,16 @@
 package ast
 
-import "strconv"
+import (
+	"errors"
+	"strconv"
+)
 
 type AstPrinter struct{}
 
 func (a *AstPrinter) Print(expr Expr) (interface{}, error) {
+	if expr == nil {
+		return nil, errors.New("empty expressions")
+	}
 	return expr.Accept(a)
 }
 

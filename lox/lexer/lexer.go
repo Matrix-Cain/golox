@@ -103,7 +103,13 @@ func (t *Lexer) scanToken() {
 					if t.match("/") {
 						break
 					}
+					if t.match("\n") {
+						t.line++ // fix line count after supporting nested comment
+					}
 				} else {
+					if t.peek() == "\n" {
+						t.line++ // fix line count after supporting nested comment
+					}
 					t.advance()
 				}
 			}

@@ -32,6 +32,7 @@ func (t *Grouping) Accept(v Visitor) (interface{}, error) {
 }
 
 type Literal struct {
+	Type  TokenType // golang is static typed language cache type to avoid unnecessary type switch cost
 	Value interface{}
 }
 

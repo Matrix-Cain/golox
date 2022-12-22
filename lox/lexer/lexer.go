@@ -1,5 +1,10 @@
 package lexer
 
+import (
+	"golox/utils"
+	"strconv"
+)
+
 type Lexer struct {
 	source  string
 	tokens  []Token
@@ -10,7 +15,7 @@ type Lexer struct {
 	error LexerError
 }
 
-func NewScanner(source string) *Lexer {
+func NewLexer(source string) *Lexer {
 	return &Lexer{source: source, start: 0, current: 0, line: 1}
 }
 
@@ -156,7 +161,7 @@ func (t *Lexer) addToken(type0 TokenType) {
 	t.addTokenWithLiteral(type0, "")
 }
 
-func (t *Lexer) addTokenWithLiteral(type0 TokenType, literal string) {
+func (t *Lexer) addTokenWithLiteral(type0 TokenType, literal interface{}) {
 	text := t.source[t.start:t.current]
 	t.tokens = append(t.tokens, *NewToken(type0, text, literal, t.line))
 }
@@ -215,8 +220,19 @@ func (t *Lexer) number() {
 			t.advance()
 		}
 	}
-	//double, _ := strconv.ParseFloat(t.source[t.start:t.current], 64)
-	t.addTokenWithLiteral(NUMBER, t.source[t.start:t.current])
+	// I previously get confused with Literal I am not sure whether I should keep the type as string and later change its type
+	// When building interpreter in Chapter7 I know I must save the value correspond to its type if value is float then save float value as its literal
+	float, err := strconv.ParseFloat(t.source[t.start:t.current], 64)
+	if err != nil {
+		utils.RaiseError(t.line, "lexing error failed to parse float literal")
+		t.error = LexerError{
+			HasError: true,
+			Line:     t.line,
+			Reason:   "lexing error failed to parse float literal",
+		}
+	}
+
+	t.addTokenWithLiteral(NUMBER, float)
 }
 
 func (t *Lexer) peekNext() string {

@@ -27,6 +27,22 @@ comment
 	vm.RunStr(snippet)
 }
 
+func TestCodeSnippet3(t *testing.T) {
+	snippet := `
+4/3.1415926
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+}
+
+func TestCodeSnippet4(t *testing.T) {
+	snippet := `
+true+true
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+}
+
 /* no `;` at end of line */
 func TestMalformedCodeSnippet1(t *testing.T) {
 	snippet := `// Your first Lox program!

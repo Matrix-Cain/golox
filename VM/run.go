@@ -3,8 +3,7 @@ package VM
 import (
 	"bufio"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"golox/lox/ast"
+	"golox/lox/interpreter"
 	"golox/lox/lexer"
 	"golox/lox/parser"
 	"golox/utils"
@@ -12,7 +11,11 @@ import (
 )
 
 type VM struct {
-	hadError bool
+	hadError        bool
+	hadRuntimeError bool
+	vmLexer         *lexer.Lexer
+	vmParser        *parser.Parser
+	vmInterpreter   *interpreter.Interpreter
 }
 
 func (v *VM) RunFile(path string) {
@@ -21,6 +24,9 @@ func (v *VM) RunFile(path string) {
 	// Indicate an error in the exit code.
 	if v.hadError {
 		os.Exit(65)
+	}
+	if v.hadRuntimeError {
+		os.Exit(70)
 	}
 }
 
@@ -52,15 +58,15 @@ func (v *VM) RunPrompt() {
 }
 
 func (v *VM) run(source string) {
-	scanner := lexer.NewScanner(source)
-	tokens, lexerError := scanner.ScanTokens()
+	v.vmLexer = lexer.NewLexer(source)
+	tokens, lexerError := v.vmLexer.ScanTokens()
 	if lexerError.HasError {
 		utils.RaiseError(lexerError.Line, lexerError.Reason)
 		v.hadError = true
 	}
 
-	parser0 := parser.NewParser(tokens)
-	expression, parseError := parser0.Parse()
+	v.vmParser = parser.NewParser(tokens)
+	expression, parseError := v.vmParser.Parse()
 
 	if parseError.HasError {
 		v.hadError = true
@@ -69,10 +75,12 @@ func (v *VM) run(source string) {
 	if v.hadError {
 		return
 	}
-	printer := ast.AstPrinter{}
-	str, _ := printer.Print(expression)
 
-	log.Println(str.(string))
+	runtimeError := v.vmInterpreter.Interpret(expression)
+
+	if runtimeError.HasError {
+		v.hadRuntimeError = true
+	}
 
 }
 

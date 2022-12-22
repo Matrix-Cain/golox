@@ -95,16 +95,16 @@ func (p *Parser) unary() (ast.Expr, error) {
 
 func (p *Parser) primary() (ast.Expr, error) {
 	if p.match(lexer.FALSE) {
-		return &ast.Literal{Value: false}, nil
+		return &ast.Literal{Type: lexer.FALSE, Value: false}, nil
 	}
 	if p.match(lexer.TRUE) {
-		return &ast.Literal{Value: true}, nil
+		return &ast.Literal{Type: lexer.TRUE, Value: true}, nil
 	}
 	if p.match(lexer.NIL) {
-		return &ast.Literal{}, nil
+		return &ast.Literal{Type: lexer.NIL, Value: nil}, nil
 	}
 	if p.match(lexer.NUMBER, lexer.STRING) {
-		return &ast.Literal{Value: p.previous().Literal}, nil
+		return &ast.Literal{Type: p.previous().Type0, Value: p.previous().Literal}, nil
 	}
 	if p.match(lexer.LEFT_PAREN) {
 		expr, err := p.expression()
@@ -145,7 +145,11 @@ func (p *Parser) synchronize() {
 }
 
 func (p *Parser) raiseError(token lexer.Token, message string) error {
-	utils.Error(token, message)
+	if token.Type0 == lexer.EOF {
+		utils.Report(token.Line, " at end", message)
+	} else {
+		utils.Report(token.Line, " at '"+token.Lexeme+"'", message)
+	}
 	return errors.New("Parse Error")
 }
 

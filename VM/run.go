@@ -66,7 +66,7 @@ func (v *VM) run(source string) {
 	}
 
 	v.vmParser = parser.NewParser(tokens)
-	expression, parseError := v.vmParser.Parse()
+	statements, parseError := v.vmParser.Parse()
 
 	if parseError.HasError {
 		v.hadError = true
@@ -76,7 +76,8 @@ func (v *VM) run(source string) {
 		return
 	}
 
-	runtimeError := v.vmInterpreter.Interpret(expression)
+	v.vmInterpreter = interpreter.NewInterpreter()
+	runtimeError := v.vmInterpreter.Interpret(statements)
 
 	if runtimeError.HasError {
 		v.hadRuntimeError = true

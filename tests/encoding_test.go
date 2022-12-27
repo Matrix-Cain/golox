@@ -14,3 +14,7 @@ func TestZH(t *testing.T) {
 		w = width
 	}
 }
+
+func TestPrint(t *testing.T) {
+	fmt.Println(nil)
+}

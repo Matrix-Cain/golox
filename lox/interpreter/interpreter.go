@@ -3,6 +3,8 @@ package interpreter
 import (
 	"fmt"
 	"golox/lox/ast"
+	"golox/lox/common"
+	"golox/lox/environment"
 	"golox/lox/lexer"
 	"golox/utils"
 	"strconv"
@@ -10,17 +12,32 @@ import (
 )
 
 type Interpreter struct {
+	environment *environment.Environment
 }
 
-func (i *Interpreter) Interpret(expression ast.Expr) RuntimeError {
-	value, err := i.evaluate(expression)
-	if err != nil {
-		runtimeError := err.(RuntimeError)
-		utils.RaiseError(runtimeError.Token.Line, runtimeError.Reason)
-		return runtimeError
+func NewInterpreter() *Interpreter {
+	return &Interpreter{environment: environment.GetEnvironment()}
+}
+
+func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
+	for _, statement := range statements {
+		_, err := i.execute(statement)
+		if err != nil {
+			if runtimeError, ok := err.(common.RuntimeError); ok {
+				utils.RaiseError(runtimeError.Token.Line, runtimeError.Reason)
+				return runtimeError
+			}
+
+		}
 	}
-	fmt.Println(i.stringify(value))
-	return RuntimeError{HasError: false}
+	//value, err := i.evaluate(expression)
+	//if err != nil {
+	//	common.runtimeError := err.(common.RuntimeError)
+	//	utils.RaiseError(common.runtimeError.Token.Line, common.runtimeError.Reason)
+	//	return common.runtimeError
+	//}
+	//fmt.Println(i.stringify(value))
+	return common.RuntimeError{HasError: false}
 }
 
 func (i *Interpreter) VisitLiteralExpr(expr *ast.Literal) (interface{}, error) {
@@ -64,7 +81,11 @@ func (i *Interpreter) VisitUnaryExpr(expr *ast.Unary) (interface{}, error) {
 		}
 		return -rightVal.Value.(float64), nil
 	}
-	return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitUnaryExpr unreachable"}
+	return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitUnaryExpr unreachable"}
+}
+
+func (i *Interpreter) VisitVariableExpr(expr *ast.Variable) (interface{}, error) {
+	return i.environment.Get(expr.Name)
 }
 
 func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
@@ -155,7 +176,7 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 			return leftVal.Value.(float64) + rightVal.Value.(float64), nil
 		}
 
-		return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "operands must be numbers or strings"}
+		return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "operands must be numbers or strings"}
 	case lexer.SLASH:
 		err := i.checkNumberOperands(expr.Operator, leftVal, rightVal)
 		if err != nil {
@@ -170,7 +191,7 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 		return leftVal.Value.(float64) * rightVal.Value.(float64), nil
 	}
 
-	return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitBinaryExpr unreachable"}
+	return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitBinaryExpr unreachable"}
 }
 
 func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
@@ -179,6 +200,74 @@ func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
 
 func (i *Interpreter) evaluate(expr ast.Expr) (interface{}, error) {
 	return expr.Accept(i)
+}
+
+func (i *Interpreter) execute(stmt ast.Stmt) (interface{}, error) {
+	return stmt.Accept(i)
+}
+
+func (i *Interpreter) executeBlock(statements []ast.Stmt, environment *environment.Environment) (interface{}, error) {
+	previousEnviron := i.environment
+	defer func() {
+		i.environment = previousEnviron
+	}()
+	i.environment = environment
+	for _, statement := range statements {
+		_, err := i.execute(statement)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) VisitBlockStmt(stmt *ast.Block) (interface{}, error) {
+	_, err := i.executeBlock(stmt.Statements, environment.GetEnclosingEnvironment(i.environment)) // introduce enclosing var scope
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) VisitExpressionStmt(stmt *ast.Expression) (interface{}, error) {
+	_, err := i.evaluate(stmt.Expression)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) VisitPrintStmt(stmt *ast.Print) (interface{}, error) {
+	value, err := i.evaluate(stmt.Expression)
+	if err == nil {
+		fmt.Println(i.stringify(value))
+	}
+	return nil, err
+}
+
+func (i *Interpreter) VisitVarStmt(stmt *ast.Var) (interface{}, error) {
+	var value interface{}
+	var err error
+	if stmt.Initializer != nil {
+		value, err = i.evaluate(stmt.Initializer)
+		if err != nil {
+			return nil, err
+		}
+	}
+	i.environment.Define(stmt.Name.Lexeme, value)
+	return nil, nil
+}
+
+func (i *Interpreter) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
+	value, err := i.evaluate(expr.Value)
+	if err == nil {
+		err := i.environment.Assign(expr.Name, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, err
+
 }
 
 /*
@@ -209,14 +298,14 @@ func (i *Interpreter) checkNumberOperand(operator lexer.Token, operand ast.Liter
 	if operand.Type == lexer.NUMBER {
 		return nil
 	}
-	return RuntimeError{HasError: true, Token: operator, Reason: "operand must be a number"}
+	return common.RuntimeError{HasError: true, Token: operator, Reason: "operand must be a number"}
 }
 
 func (i *Interpreter) checkNumberOperands(operator lexer.Token, operandLeft ast.Literal, operandRight ast.Literal) error {
 	if operandLeft.Type == lexer.NUMBER && operandRight.Type == lexer.NUMBER {
 		return nil
 	}
-	return RuntimeError{HasError: true, Token: operator, Reason: "operand must be a number"}
+	return common.RuntimeError{HasError: true, Token: operator, Reason: "operand must be a number"}
 }
 
 func (i *Interpreter) stringify(object interface{}) string {

@@ -11,6 +11,8 @@ type Visitor interface {
 	VisitGroupingExpr(expr *Grouping) (interface{}, error)
 	VisitLiteralExpr(expr *Literal) (interface{}, error)
 	VisitUnaryExpr(expr *Unary) (interface{}, error)
+	VisitVariableExpr(expr *Variable) (interface{}, error)
+	VisitAssignExpr(expr *Assign) (interface{}, error)
 	VisitTernaryExpr(expr *Ternary) (interface{}, error)
 }
 
@@ -48,6 +50,23 @@ type Unary struct {
 
 func (t *Unary) Accept(v Visitor) (interface{}, error) {
 	return v.VisitUnaryExpr(t)
+}
+
+type Variable struct {
+	Name Token
+}
+
+func (t *Variable) Accept(v Visitor) (interface{}, error) {
+	return v.VisitVariableExpr(t)
+}
+
+type Assign struct {
+	Name  Token
+	Value Expr
+}
+
+func (t *Assign) Accept(v Visitor) (interface{}, error) {
+	return v.VisitAssignExpr(t)
 }
 
 type Ternary struct {

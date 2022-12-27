@@ -61,7 +61,7 @@ func (v *VM) run(source string) {
 	v.vmLexer = lexer.NewLexer(source)
 	tokens, lexerError := v.vmLexer.ScanTokens()
 	if lexerError.HasError {
-		utils.RaiseError(lexerError.Line, lexerError.Reason)
+		utils.Report(lexerError.Line, "Lexing", lexerError.Reason)
 		v.hadError = true
 	}
 

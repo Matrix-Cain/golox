@@ -139,6 +139,14 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 		}
 		return leftVal.Value.(float64) - rightVal.Value.(float64), nil
 	case lexer.PLUS:
+		if leftVal.Type == lexer.STRING && rightVal.Type == lexer.NUMBER {
+			return leftVal.Value.(string) + strconv.FormatFloat(rightVal.Value.(float64), 'f', -1, 64), nil
+		}
+
+		if leftVal.Type == lexer.NUMBER && rightVal.Type == lexer.STRING {
+			return strconv.FormatFloat(leftVal.Value.(float64), 'f', -1, 64) + rightVal.Value.(string), nil
+		}
+
 		if leftVal.Type == lexer.STRING && rightVal.Type == lexer.STRING {
 			return leftVal.Value.(string) + rightVal.Value.(string), nil
 		}
@@ -147,7 +155,7 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 			return leftVal.Value.(float64) + rightVal.Value.(float64), nil
 		}
 
-		return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "operands must be two numbers or two strings"}
+		return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "operands must be numbers or strings"}
 	case lexer.SLASH:
 		err := i.checkNumberOperands(expr.Operator, leftVal, rightVal)
 		if err != nil {
@@ -163,6 +171,10 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 	}
 
 	return nil, RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitBinaryExpr unreachable"}
+}
+
+func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
+	return nil, nil
 }
 
 func (i *Interpreter) evaluate(expr ast.Expr) (interface{}, error) {

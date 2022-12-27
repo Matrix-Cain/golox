@@ -1,17 +1,16 @@
 package tests
 
 import (
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestZH(t *testing.T) {
-	in := "你1好1世1界"
-	log.Infof(string(in[0]))
-	log.Infof(string(in[1]))
-	log.Infof(string(in[2]))
-	log.Infof(string(in[3]))
-	log.Infof(string(in[4]))
-	log.Infof(string(in[5]))
-	log.Infof(string(in[6]))
+	const nihongo = "日本語"
+	for i, w := 0, 0; i < len(nihongo); i += w {
+		runeValue, width := utf8.DecodeRuneInString(nihongo[i:])
+		fmt.Printf("%#U starts at byte position %d\n", runeValue, i)
+		w = width
+	}
 }

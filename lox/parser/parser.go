@@ -26,7 +26,21 @@ func (p *Parser) Parse() (ast.Expr, ParseError) {
 }
 
 func (p *Parser) expression() (ast.Expr, error) {
-	return p.equality()
+	return p.conditional()
+}
+
+func (p *Parser) conditional() (ast.Expr, error) {
+	var expr, thenBranch, elseBranch ast.Expr
+	var err error
+	expr, err = p.equality()
+
+	if p.match(lexer.QUESTION) {
+		thenBranch, err = p.expression()
+		p.Consume(lexer.COLON, "Expect ':' after then branch of conditional expression.")
+		elseBranch, err = p.conditional()
+		expr = &ast.Ternary{ConditionalExpr: expr, ThenExpr: thenBranch, ElseExpr: elseBranch}
+	}
+	return expr, err
 }
 
 func (p *Parser) equality() (ast.Expr, error) {
@@ -110,6 +124,9 @@ func (p *Parser) primary() (ast.Expr, error) {
 		expr, err := p.expression()
 		_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after expression.")
 		return &ast.Grouping{Expression: expr}, err
+	}
+	if p.match(lexer.BANG_EQUAL, lexer.EQUAL_EQUAL, lexer.GREATER_EQUAL, lexer.GREATER, lexer.LESS, lexer.LESS_EQUAL, lexer.PLUS, lexer.SLASH, lexer.STAR) {
+		return nil, p.raiseError(p.previous(), "Missing Left Hand Operand")
 	}
 	return nil, p.raiseError(p.peek(), "Expect expression.")
 }

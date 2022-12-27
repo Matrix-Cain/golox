@@ -10,5 +10,5 @@ func RaiseError(line int, message string) {
 }
 
 func Report(line int, where string, message string) {
-	log.Errorln("[line " + strconv.Itoa(line) + "] Error" + where + ": " + message)
+	log.Errorln("[line " + strconv.Itoa(line) + "] Error " + where + ": " + message)
 }

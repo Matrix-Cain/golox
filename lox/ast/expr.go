@@ -11,6 +11,7 @@ type Visitor interface {
 	VisitGroupingExpr(expr *Grouping) (interface{}, error)
 	VisitLiteralExpr(expr *Literal) (interface{}, error)
 	VisitUnaryExpr(expr *Unary) (interface{}, error)
+	VisitTernaryExpr(expr *Ternary) (interface{}, error)
 }
 
 type Binary struct {
@@ -47,4 +48,14 @@ type Unary struct {
 
 func (t *Unary) Accept(v Visitor) (interface{}, error) {
 	return v.VisitUnaryExpr(t)
+}
+
+type Ternary struct {
+	ConditionalExpr Expr
+	ThenExpr        Expr
+	ElseExpr        Expr
+}
+
+func (t *Ternary) Accept(v Visitor) (interface{}, error) {
+	return v.VisitTernaryExpr(t)
 }

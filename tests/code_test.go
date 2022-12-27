@@ -29,7 +29,8 @@ comment
 
 func TestCodeSnippet3(t *testing.T) {
 	snippet := `
-4/3.1415926
+"2"+3
+2>1:4/3.1415926?3
 `
 	vm := &VM.VM{}
 	vm.RunStr(snippet)

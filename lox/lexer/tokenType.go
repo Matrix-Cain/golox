@@ -25,6 +25,10 @@ const (
 	GREATER_EQUAL
 	LESS
 	LESS_EQUAL
+	COLON
+
+	//ternary
+	QUESTION
 
 	// Literals.
 	IDENTIFIER

@@ -95,6 +95,10 @@ func (t *Lexer) scanToken() {
 		}
 		break
 
+	case "?":
+		t.addToken(QUESTION)
+	case ":":
+		t.addToken(COLON)
 	case "/":
 		if t.match("/") {
 			// A comment goes until the end of the line

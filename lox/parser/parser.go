@@ -16,17 +16,110 @@ func NewParser(tokens []lexer.Token) *Parser {
 	return &Parser{tokens: tokens, current: 0}
 }
 
-func (p *Parser) Parse() (ast.Expr, ParseError) {
-	expr, err := p.expression()
-	if err != nil {
-		return nil, ParseError{HasError: true}
-	} else {
-		return expr, ParseError{HasError: false}
+func (p *Parser) Parse() ([]ast.Stmt, ParseError) {
+	statements := make([]ast.Stmt, 0)
+	for !p.isAtEnd() {
+		statement, err := p.declaration()
+		if err != nil {
+			return statements, ParseError{HasError: true}
+		}
+		statements = append(statements, statement)
 	}
+	return statements, ParseError{HasError: false}
+	//expr, err := p.expression()
+	//if err != nil {
+	//	return nil, ParseError{HasError: true}
+	//} else {
+	//	return expr, ParseError{HasError: false}
+	//}
+}
+
+func (p *Parser) declaration() (ast.Stmt, error) {
+	if p.match(lexer.VAR) {
+		stmt, err := p.varDeclaration()
+		if err != nil {
+			p.synchronize()
+			return nil, nil
+		}
+		return stmt, nil
+	}
+	stmt, err := p.statement()
+	if err != nil {
+		p.synchronize()
+		return nil, nil
+	}
+	return stmt, nil
+}
+
+func (p *Parser) statement() (ast.Stmt, error) {
+	if p.match(lexer.PRINT) {
+		return p.printStatement()
+	}
+	if p.match(lexer.LEFT_BRACE) {
+		statements, err := p.block()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.Block{Statements: statements}, nil
+	}
+	return p.expressionStatement()
+}
+
+func (p *Parser) printStatement() (ast.Stmt, error) {
+	value, err := p.expression()
+	p.Consume(lexer.SEMICOLON, "Expect ';' after value.")
+	return &ast.Print{Expression: value}, err
+}
+
+func (p *Parser) varDeclaration() (ast.Stmt, error) {
+	name, err := p.Consume(lexer.IDENTIFIER, "Expect variable name.")
+	if err != nil {
+		return nil, err
+	}
+	var initializer ast.Expr
+	if p.match(lexer.EQUAL) {
+		initializer, err = p.expression()
+	}
+	p.Consume(lexer.SEMICOLON, "Expect ';' after variable declaration.")
+	return &ast.Var{Name: name, Initializer: initializer}, nil
+}
+
+func (p *Parser) expressionStatement() (ast.Stmt, error) {
+	expr, err := p.expression()
+	p.Consume(lexer.SEMICOLON, "Expect ';' after expression.")
+	return &ast.Expression{Expression: expr}, err
+}
+
+func (p *Parser) block() ([]ast.Stmt, error) {
+	statements := make([]ast.Stmt, 0)
+	for !p.check(lexer.RIGHT_BRACE) && !p.isAtEnd() {
+		statement, err := p.declaration()
+		if err != nil {
+			return statements, err
+		}
+		statements = append(statements, statement)
+	}
+	_, err := p.Consume(lexer.RIGHT_BRACE, "Expect '}' after block.")
+	return statements, err
 }
 
 func (p *Parser) expression() (ast.Expr, error) {
-	return p.conditional()
+	return p.assignment()
+}
+
+func (p *Parser) assignment() (ast.Expr, error) {
+	expr, err := p.conditional()
+
+	if p.match(lexer.EQUAL) {
+		equals := p.previous()
+		value, err := p.assignment()
+		if v, ok := expr.(*ast.Variable); ok {
+			name := v.Name
+			return &ast.Assign{Name: name, Value: value}, err
+		}
+		utils.Report(equals.Line, " Parser ", "Invalid assignment target.")
+	}
+	return expr, err
 }
 
 func (p *Parser) conditional() (ast.Expr, error) {
@@ -119,6 +212,9 @@ func (p *Parser) primary() (ast.Expr, error) {
 	}
 	if p.match(lexer.NUMBER, lexer.STRING) {
 		return &ast.Literal{Type: p.previous().Type0, Value: p.previous().Literal}, nil
+	}
+	if p.match(lexer.IDENTIFIER) {
+		return &ast.Variable{Name: p.previous()}, nil
 	}
 	if p.match(lexer.LEFT_PAREN) {
 		expr, err := p.expression()

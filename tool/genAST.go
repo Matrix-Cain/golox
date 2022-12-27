@@ -4,6 +4,7 @@ import (
 	"bufio"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -16,12 +17,24 @@ func main() {
 	defineAst(outputDir, "Expr", []string{
 		"Binary   :  Left Expr, Operator Token, Right Expr",
 		"Grouping :  Expression Expr",
-		"Literal  :  Value interface{}",
-		"Unary    :  Operator Token, Right Expr"})
+		"Literal  :  Type TokenType// golang is static typed language cache type to avoid unnecessary type switch cost, Value interface{}",
+		"Unary    :  Operator Token, Right Expr",
+		"Ternary  :  ConditionalExpr Expr, ThenExpr Expr, ElseExpr Expr"})
+
+	path := outputDir + "/" + "expr.go"
+	err := exec.Command("go", "fmt", path).Run()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	//defineAst(outputDir, "Stmt", []string{
+	//	"Expression :  expression Expr",
+	//	"Print      :  expression Expr"})
 }
 
 func defineAst(outputDir string, baseName string, types []string) {
-	path := outputDir + "/" + baseName + ".go"
+	path := outputDir + "/" + strings.ToLower(baseName) + ".go"
 	fd, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		log.Error("Cannot create or open file with error " + err.Error())

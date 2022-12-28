@@ -20,4 +20,6 @@ func init() {
 	KeyWords["true"] = TRUE
 	KeyWords["var"] = VAR
 	KeyWords["while"] = WHILE
+	KeyWords["break"] = BREAK
+	KeyWords["continue"] = CONTINUE
 }

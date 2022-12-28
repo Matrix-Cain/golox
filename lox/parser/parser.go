@@ -52,8 +52,23 @@ func (p *Parser) declaration() (ast.Stmt, error) {
 }
 
 func (p *Parser) statement() (ast.Stmt, error) {
+	if p.match(lexer.FOR) {
+		return p.forStatement()
+	}
+	if p.match(lexer.IF) {
+		return p.ifStatement()
+	}
 	if p.match(lexer.PRINT) {
 		return p.printStatement()
+	}
+	if p.match(lexer.WHILE) {
+		return p.whileStatement()
+	}
+	if p.match(lexer.BREAK) {
+		return p.breakStatement()
+	}
+	if p.match(lexer.CONTINUE) {
+		return p.continueStatement()
 	}
 	if p.match(lexer.LEFT_BRACE) {
 		statements, err := p.block()
@@ -65,14 +80,84 @@ func (p *Parser) statement() (ast.Stmt, error) {
 	return p.expressionStatement()
 }
 
+func (p *Parser) forStatement() (ast.Stmt, error) {
+	var initializer ast.Stmt
+	var err error
+	_, err = p.Consume(lexer.LEFT_PAREN, "Expect '(' after 'for'")
+	if p.match(lexer.SEMICOLON) {
+		initializer = nil
+	} else if p.match(lexer.VAR) {
+		initializer, err = p.varDeclaration()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		initializer, err = p.expressionStatement()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var condition ast.Expr
+
+	if !p.check(lexer.SEMICOLON) {
+		condition, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after loop condition")
+
+	var incremental ast.Expr
+	if !p.check(lexer.RIGHT_PAREN) {
+		incremental, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after for clauses")
+
+	body, err := p.statement()
+	if err != nil {
+		return nil, err
+	}
+
+	if incremental != nil {
+		body = &ast.Block{Statements: []ast.Stmt{body}}
+	}
+	if condition == nil {
+		condition = &ast.Literal{Type: lexer.TRUE, Value: true}
+	}
+	body = &ast.While{Condition: condition, Body: body, OptionalMutate: incremental}
+	if initializer != nil {
+		body = &ast.Block{Statements: []ast.Stmt{initializer, body}}
+	}
+	return body, nil
+
+}
+
+func (p *Parser) ifStatement() (ast.Stmt, error) {
+	var err error
+	_, err = p.Consume(lexer.LEFT_PAREN, "Expect '(' after 'if'")
+	condition, err := p.expression()
+	_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after 'if'")
+
+	thenBranch, err := p.statement()
+	var elseBranch ast.Stmt
+	if p.match(lexer.ELSE) {
+		elseBranch, err = p.statement()
+	}
+	return &ast.If{Condition: condition, ThenBranch: thenBranch, ElseBranch: elseBranch}, err
+}
+
 func (p *Parser) printStatement() (ast.Stmt, error) {
 	value, err := p.expression()
-	p.Consume(lexer.SEMICOLON, "Expect ';' after value.")
+	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after value")
 	return &ast.Print{Expression: value}, err
 }
 
 func (p *Parser) varDeclaration() (ast.Stmt, error) {
-	name, err := p.Consume(lexer.IDENTIFIER, "Expect variable name.")
+	name, err := p.Consume(lexer.IDENTIFIER, "Expect variable name")
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +165,31 @@ func (p *Parser) varDeclaration() (ast.Stmt, error) {
 	if p.match(lexer.EQUAL) {
 		initializer, err = p.expression()
 	}
-	p.Consume(lexer.SEMICOLON, "Expect ';' after variable declaration.")
+	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after variable declaration")
 	return &ast.Var{Name: name, Initializer: initializer}, nil
+}
+
+func (p *Parser) whileStatement() (ast.Stmt, error) {
+	_, err := p.Consume(lexer.LEFT_PAREN, "Expect '(' after 'while')")
+	condition, err := p.expression()
+	_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after condition")
+	body, err := p.statement()
+	return &ast.While{Condition: condition, Body: body}, err
+}
+
+func (p *Parser) breakStatement() (ast.Stmt, error) {
+	_, err := p.Consume(lexer.SEMICOLON, "Expect ';' after statement")
+	return &ast.Break{}, err
+}
+
+func (p *Parser) continueStatement() (ast.Stmt, error) {
+	_, err := p.Consume(lexer.SEMICOLON, "Expect ';' after statement")
+	return &ast.Continue{}, err
 }
 
 func (p *Parser) expressionStatement() (ast.Stmt, error) {
 	expr, err := p.expression()
-	p.Consume(lexer.SEMICOLON, "Expect ';' after expression.")
+	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after expression")
 	return &ast.Expression{Expression: expr}, err
 }
 
@@ -108,7 +211,7 @@ func (p *Parser) expression() (ast.Expr, error) {
 }
 
 func (p *Parser) assignment() (ast.Expr, error) {
-	expr, err := p.conditional()
+	expr, err := p.or()
 
 	if p.match(lexer.EQUAL) {
 		equals := p.previous()
@@ -122,6 +225,31 @@ func (p *Parser) assignment() (ast.Expr, error) {
 	return expr, err
 }
 
+func (p *Parser) or() (ast.Expr, error) {
+	var err error
+	var right ast.Expr
+	expr, err := p.and()
+
+	for p.match(lexer.OR) {
+		operator := p.previous()
+		right, err = p.and()
+		expr = &ast.Logical{Left: expr, Operator: operator, Right: right}
+	}
+	return expr, err
+}
+
+func (p *Parser) and() (ast.Expr, error) {
+	var err error
+	var right ast.Expr
+	expr, err := p.conditional()
+	for p.match(lexer.AND) {
+		operator := p.previous()
+		right, err = p.conditional()
+		expr = &ast.Logical{Left: expr, Operator: operator, Right: right}
+	}
+	return expr, err
+}
+
 func (p *Parser) conditional() (ast.Expr, error) {
 	var expr, thenBranch, elseBranch ast.Expr
 	var err error
@@ -129,7 +257,7 @@ func (p *Parser) conditional() (ast.Expr, error) {
 
 	if p.match(lexer.QUESTION) {
 		thenBranch, err = p.expression()
-		p.Consume(lexer.COLON, "Expect ':' after then branch of conditional expression.")
+		_, err = p.Consume(lexer.COLON, "Expect ':' after then branch of conditional expression.")
 		elseBranch, err = p.conditional()
 		expr = &ast.Ternary{ConditionalExpr: expr, ThenExpr: thenBranch, ElseExpr: elseBranch}
 	}
@@ -197,6 +325,11 @@ func (p *Parser) unary() (ast.Expr, error) {
 		right, err := p.unary()
 		return &ast.Unary{Operator: operator, Right: right}, err
 	}
+	if p.match(lexer.INCREMENT, lexer.DECREMENT) {
+		operator := p.previous()
+		right, err := p.unary()
+		return &ast.Unary{Operator: operator, Right: right}, err
+	}
 	return p.primary()
 }
 
@@ -214,11 +347,19 @@ func (p *Parser) primary() (ast.Expr, error) {
 		return &ast.Literal{Type: p.previous().Type0, Value: p.previous().Literal}, nil
 	}
 	if p.match(lexer.IDENTIFIER) {
-		return &ast.Variable{Name: p.previous()}, nil
+		name := p.previous()
+		if p.match(lexer.INCREMENT) {
+			return &ast.Unary{Operator: lexer.Token{Type0: lexer.INCREMENT}, Right: &ast.Variable{Name: name}}, nil
+		}
+		if p.match(lexer.DECREMENT) {
+			return &ast.Unary{Operator: lexer.Token{Type0: lexer.DECREMENT}, Right: &ast.Variable{Name: name}}, nil
+		}
+		return &ast.Variable{Name: name}, nil
+
 	}
 	if p.match(lexer.LEFT_PAREN) {
 		expr, err := p.expression()
-		_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after expression.")
+		_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after expression")
 		return &ast.Grouping{Expression: expr}, err
 	}
 	if p.match(lexer.BANG_EQUAL, lexer.EQUAL_EQUAL, lexer.GREATER_EQUAL, lexer.GREATER, lexer.LESS, lexer.LESS_EQUAL, lexer.PLUS, lexer.SLASH, lexer.STAR) {
@@ -263,7 +404,7 @@ func (p *Parser) raiseError(token lexer.Token, message string) error {
 	} else {
 		utils.Report(token.Line, " at '"+token.Lexeme+"'", message)
 	}
-	return errors.New("Parse Error")
+	return errors.New("parse error")
 }
 
 func (p *Parser) match(types ...lexer.TokenType) bool {

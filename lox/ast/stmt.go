@@ -7,10 +7,14 @@ type Stmt interface {
 }
 
 type StmtVisitor interface {
+	VisitBlockStmt(stmt *Block) (interface{}, error)
 	VisitExpressionStmt(stmt *Expression) (interface{}, error)
+	VisitIfStmt(stmt *If) (interface{}, error)
 	VisitPrintStmt(stmt *Print) (interface{}, error)
 	VisitVarStmt(stmt *Var) (interface{}, error)
-	VisitBlockStmt(stmt *Block) (interface{}, error)
+	VisitWhileStmt(stmt *While) (interface{}, error)
+	VisitBreakStmt(stmt *Break) (interface{}, error)
+	VisitContinueStmt(stmt *Continue) (interface{}, error)
 }
 
 type Block struct {
@@ -29,6 +33,16 @@ func (t *Expression) Accept(v StmtVisitor) (interface{}, error) {
 	return v.VisitExpressionStmt(t)
 }
 
+type If struct {
+	Condition  Expr
+	ThenBranch Stmt
+	ElseBranch Stmt
+}
+
+func (t *If) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitIfStmt(t)
+}
+
 type Print struct {
 	Expression Expr
 }
@@ -44,4 +58,28 @@ type Var struct {
 
 func (t *Var) Accept(v StmtVisitor) (interface{}, error) {
 	return v.VisitVarStmt(t)
+}
+
+type While struct {
+	Condition      Expr
+	Body           Stmt
+	OptionalMutate Expr
+}
+
+func (t *While) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitWhileStmt(t)
+}
+
+type Break struct {
+}
+
+func (t *Break) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitBreakStmt(t)
+}
+
+type Continue struct {
+}
+
+func (t *Continue) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitContinueStmt(t)
 }

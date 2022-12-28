@@ -18,3 +18,20 @@ func TestZH(t *testing.T) {
 func TestPrint(t *testing.T) {
 	fmt.Println(nil)
 }
+
+func TestFor(t *testing.T) {
+	var a, b, c int
+	a = 0
+	b = 1
+	c = 2
+	for a = b; a < c; a++ {
+		fmt.Println("strange")
+	}
+}
+
+func TestBreak(t *testing.T) {
+	for 1 < 2 {
+		break
+	}
+
+}

@@ -12,7 +12,10 @@ import (
 )
 
 type Interpreter struct {
-	environment *environment.Environment
+	environment   *environment.Environment
+	loopCnt       int
+	breakState    bool
+	continueState bool
 }
 
 func NewInterpreter() *Interpreter {
@@ -80,6 +83,19 @@ func (i *Interpreter) VisitUnaryExpr(expr *ast.Unary) (interface{}, error) {
 			return nil, err
 		}
 		return -rightVal.Value.(float64), nil
+
+	case lexer.INCREMENT:
+		err := i.checkNumberOperand(expr.Operator, rightVal)
+		if err != nil {
+			return nil, err
+		}
+		return rightVal.Value.(float64) + 1, nil
+	case lexer.DECREMENT:
+		err := i.checkNumberOperand(expr.Operator, rightVal)
+		if err != nil {
+			return nil, err
+		}
+		return rightVal.Value.(float64) - 1, nil
 	}
 	return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitUnaryExpr unreachable"}
 }
@@ -195,7 +211,36 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 }
 
 func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
-	return nil, nil
+	var res interface{}
+	var err error
+	res, err = i.evaluate(expr.ConditionalExpr)
+	if err != nil {
+		return nil, err
+	}
+	if i.isTruthy(res) {
+		_, err = i.evaluate(expr.ThenExpr)
+	} else {
+		if !i.isTruthy(res) {
+			_, err = i.evaluate(expr.ElseExpr)
+		}
+	}
+	return nil, err
+}
+
+func (i *Interpreter) VisitLogicalExpr(expr *ast.Logical) (interface{}, error) {
+	var left interface{}
+	var err error
+	left, err = i.evaluate(expr.Left)
+	if expr.Operator.Type0 == lexer.OR {
+		if i.isTruthy(left) {
+			return left, err
+		}
+	} else {
+		if !i.isTruthy(left) {
+			return left, err
+		}
+	}
+	return i.evaluate(expr.Right)
 }
 
 func (i *Interpreter) evaluate(expr ast.Expr) (interface{}, error) {
@@ -214,9 +259,15 @@ func (i *Interpreter) executeBlock(statements []ast.Stmt, environment *environme
 	i.environment = environment
 	for _, statement := range statements {
 		_, err := i.execute(statement)
+
 		if err != nil {
 			return nil, err
 		}
+
+		if i.breakState {
+			return nil, nil
+		}
+
 	}
 	return nil, nil
 }
@@ -229,10 +280,46 @@ func (i *Interpreter) VisitBlockStmt(stmt *ast.Block) (interface{}, error) {
 	return nil, nil
 }
 
+func (i *Interpreter) VisitBreakStmt(stmt *ast.Break) (interface{}, error) {
+	if i.loopCnt > 0 {
+		i.breakState = true
+	} else {
+		return nil, common.RuntimeError{HasError: true, Token: lexer.Token{Type0: lexer.BREAK}, Reason: "'break' outside loop"}
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) VisitContinueStmt(stmt *ast.Continue) (interface{}, error) {
+	if i.loopCnt > 0 {
+		i.continueState = true
+	} else {
+		return nil, common.RuntimeError{HasError: true, Token: lexer.Token{Type0: lexer.CONTINUE}, Reason: "'continue' outside loop"}
+	}
+	return nil, nil
+}
+
 func (i *Interpreter) VisitExpressionStmt(stmt *ast.Expression) (interface{}, error) {
 	_, err := i.evaluate(stmt.Expression)
 	if err != nil {
 		return nil, err
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) VisitIfStmt(stmt *ast.If) (interface{}, error) {
+	var err error
+	var res interface{}
+	res, err = i.evaluate(stmt.Condition)
+	if i.isTruthy(res) {
+		_, err = i.execute(stmt.ThenBranch)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		_, err = i.execute(stmt.ElseBranch)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return nil, nil
 }
@@ -258,6 +345,45 @@ func (i *Interpreter) VisitVarStmt(stmt *ast.Var) (interface{}, error) {
 	return nil, nil
 }
 
+func (i *Interpreter) VisitWhileStmt(stmt *ast.While) (interface{}, error) {
+	var result interface{}
+	var err error
+	i.loopCnt++
+	defer func() {
+		i.loopCnt--
+	}()
+	result, err = i.evaluate(stmt.Condition)
+	if err != nil {
+		return nil, err
+	}
+	for i.isTruthy(result) {
+		_, err = i.execute(stmt.Body)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if i.continueState {
+			i.continueState = false
+		} else if i.breakState {
+			i.breakState = false
+			return nil, nil
+		}
+		if stmt.OptionalMutate != nil { // for loop
+			_, err = i.evaluate(stmt.OptionalMutate)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result, err = i.evaluate(stmt.Condition)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
 func (i *Interpreter) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
 	value, err := i.evaluate(expr.Value)
 	if err == nil {
@@ -270,13 +396,13 @@ func (i *Interpreter) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
 
 }
 
-/*
-isTruthy follow ruby rule of judging true and false
-
-	false/nil -> false
-	others -> true
-*/
 func (i *Interpreter) isTruthy(object interface{}) bool {
+	/*
+		isTruthy follow ruby rule of judging true and false
+
+			false/nil -> false
+			others -> true
+	*/
 	if object == nil {
 		return false
 	}

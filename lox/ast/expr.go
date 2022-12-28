@@ -10,6 +10,7 @@ type Visitor interface {
 	VisitBinaryExpr(expr *Binary) (interface{}, error)
 	VisitGroupingExpr(expr *Grouping) (interface{}, error)
 	VisitLiteralExpr(expr *Literal) (interface{}, error)
+	VisitLogicalExpr(expr *Logical) (interface{}, error)
 	VisitUnaryExpr(expr *Unary) (interface{}, error)
 	VisitVariableExpr(expr *Variable) (interface{}, error)
 	VisitAssignExpr(expr *Assign) (interface{}, error)
@@ -41,6 +42,16 @@ type Literal struct {
 
 func (t *Literal) Accept(v Visitor) (interface{}, error) {
 	return v.VisitLiteralExpr(t)
+}
+
+type Logical struct {
+	Left     Expr
+	Operator Token
+	Right    Expr
+}
+
+func (t *Logical) Accept(v Visitor) (interface{}, error) {
+	return v.VisitLogicalExpr(t)
 }
 
 type Unary struct {

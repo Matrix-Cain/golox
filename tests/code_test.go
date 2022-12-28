@@ -29,9 +29,9 @@ print "带专";
 
 func TestCodeSnippet3(t *testing.T) {
 	snippet := `
-"2"+3
-1+1
-2>1:4/3.1415926?3
+var a = 3;
+a = a + 1;
+print a;
 `
 	vm := &VM.VM{}
 	vm.RunStr(snippet)
@@ -70,6 +70,111 @@ print c;`
 	vm.RunStr(snippet)
 }
 
+func TestIf1(t *testing.T) {
+	snippet := `
+var a = 10;
+if(a>0){
+print a;
+}else{
+print "not possible";
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestElse1(t *testing.T) {
+	snippet := `
+var a = -3;
+if(a>0){
+print "not possible";
+}else{
+print a;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestWhile1(t *testing.T) {
+	snippet := `
+var a = -100;
+while(a<0){
+print a;
+a = a+1;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+func TestInfiniteWhile(t *testing.T) {
+	snippet := `
+var a = 0;
+while(a==0){
+print a;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+}
+
+func TestFibonacciCodeSnippet(t *testing.T) {
+	snippet := `
+var a = 0;
+var temp;
+
+for (var b = 1; a < 10000; b = temp + b) {
+  print a;
+  temp = a;
+  a = b;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+}
+
+func TestForLoop(t *testing.T) {
+	snippet := `
+for (var a=0; a<10; a = a+1){
+	print a;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestForLoopBreak(t *testing.T) {
+	snippet := `
+for (var a=0; a<10;){
+	print a;
+	break;
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestForLoopContinue(t *testing.T) {
+	snippet := `
+for (var a=0; a<10; a++){
+	print a;
+	if(a < 5){
+		continue;
+	}else{
+		break;
+	}
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
 /* no `;` at end of line */
 func TestMalformedCodeSnippet1(t *testing.T) {
 	snippet := `// Your first Lox program!
@@ -77,9 +182,9 @@ func TestMalformedCodeSnippet1(t *testing.T) {
 comment
 */
 var a = "你好世界！!";
-a = "帽子戏法";
+a = "我是练习时长两年半的练习生";
 print a;
-a=2 // no ;
+a=2; // no
 print a;`
 	vm := &VM.VM{}
 	vm.RunStr(snippet)

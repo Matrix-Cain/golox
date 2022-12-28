@@ -54,10 +54,18 @@ func (t *Lexer) scanToken() {
 		t.addToken(DOT)
 		break
 	case "-":
-		t.addToken(MINUS)
+		if t.match("-") {
+			t.addToken(DECREMENT)
+		} else {
+			t.addToken(MINUS)
+		}
 		break
 	case "+":
-		t.addToken(PLUS)
+		if t.match("+") {
+			t.addToken(INCREMENT)
+		} else {
+			t.addToken(PLUS)
+		}
 		break
 	case ";":
 		t.addToken(SEMICOLON)

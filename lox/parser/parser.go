@@ -222,6 +222,20 @@ func (p *Parser) assignment() (ast.Expr, error) {
 		}
 		utils.Report(equals.Line, " Parser ", "Invalid assignment target.")
 	}
+	if p.match(lexer.INCREMENT) {
+		if v, ok := expr.(*ast.Variable); ok {
+			name := v.Name
+			return &ast.Assign{Name: name, Value: &ast.Binary{Left: &ast.Variable{Name: name}, Operator: lexer.Token{Type0: lexer.PLUS}, Right: &ast.Literal{Type: lexer.NUMBER, Value: 1.0}}}, err
+		}
+		utils.Report(p.previous().Line, " Parser ", "Invalid assignment target.")
+	}
+	if p.match(lexer.DECREMENT) {
+		if v, ok := expr.(*ast.Variable); ok {
+			name := v.Name
+			return &ast.Assign{Name: name, Value: &ast.Binary{Left: &ast.Variable{Name: name}, Operator: lexer.Token{Type0: lexer.MINUS}, Right: &ast.Literal{Type: lexer.NUMBER, Value: 1.0}}}, err
+		}
+		utils.Report(p.previous().Line, " Parser ", "Invalid assignment target.")
+	}
 	return expr, err
 }
 
@@ -325,11 +339,6 @@ func (p *Parser) unary() (ast.Expr, error) {
 		right, err := p.unary()
 		return &ast.Unary{Operator: operator, Right: right}, err
 	}
-	if p.match(lexer.INCREMENT, lexer.DECREMENT) {
-		operator := p.previous()
-		right, err := p.unary()
-		return &ast.Unary{Operator: operator, Right: right}, err
-	}
 	return p.primary()
 }
 
@@ -347,15 +356,7 @@ func (p *Parser) primary() (ast.Expr, error) {
 		return &ast.Literal{Type: p.previous().Type0, Value: p.previous().Literal}, nil
 	}
 	if p.match(lexer.IDENTIFIER) {
-		name := p.previous()
-		if p.match(lexer.INCREMENT) {
-			return &ast.Unary{Operator: lexer.Token{Type0: lexer.INCREMENT}, Right: &ast.Variable{Name: name}}, nil
-		}
-		if p.match(lexer.DECREMENT) {
-			return &ast.Unary{Operator: lexer.Token{Type0: lexer.DECREMENT}, Right: &ast.Variable{Name: name}}, nil
-		}
-		return &ast.Variable{Name: name}, nil
-
+		return &ast.Variable{Name: p.previous()}, nil
 	}
 	if p.match(lexer.LEFT_PAREN) {
 		expr, err := p.expression()

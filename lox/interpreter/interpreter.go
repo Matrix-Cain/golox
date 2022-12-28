@@ -369,6 +369,12 @@ func (i *Interpreter) VisitWhileStmt(stmt *ast.While) (interface{}, error) {
 			i.breakState = false
 			return nil, nil
 		}
+		if stmt.OptionalMutate != nil { // for loop
+			_, err = i.evaluate(stmt.OptionalMutate)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		result, err = i.evaluate(stmt.Condition)
 		if err != nil {

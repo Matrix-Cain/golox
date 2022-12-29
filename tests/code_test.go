@@ -175,6 +175,35 @@ for (var a=0; a<10; a++){
 
 }
 
+func TestBasicNoReturnFunc(t *testing.T) {
+	snippet := `
+fun sayHi(first, last) {
+  print "Hi, " + first + " " + last + "!";
+}
+
+sayHi("Dear", "Reader");
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestBasicWithReturnFunc(t *testing.T) {
+	snippet := `
+fun fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+for (var i = 0; i < 20; i = i + 1) {
+  print fib(i);
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
 /* no `;` at end of line */
 func TestMalformedCodeSnippet1(t *testing.T) {
 	snippet := `// Your first Lox program!

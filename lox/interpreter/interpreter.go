@@ -12,6 +12,7 @@ import (
 )
 
 type Interpreter struct {
+	global        *environment.Environment
 	environment   *environment.Environment
 	loopCnt       int
 	breakState    bool
@@ -19,7 +20,11 @@ type Interpreter struct {
 }
 
 func NewInterpreter() *Interpreter {
-	return &Interpreter{environment: environment.GetEnvironment()}
+	interpreter := &Interpreter{global: environment.GetEnvironment()}
+	interpreter.environment = interpreter.global
+
+	interpreter.global.Define("clock", &Clock{})
+	return interpreter
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
@@ -210,6 +215,29 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 	return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitBinaryExpr unreachable"}
 }
 
+func (i *Interpreter) VisitCallExpr(expr *ast.Call) (interface{}, error) {
+	callee, err := i.evaluate(expr.Callee)
+	if err != nil {
+		return nil, err
+	}
+	arguments := make([]interface{}, 0)
+	for _, argument := range expr.Arguments {
+		v, err := i.evaluate(argument)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, v)
+	}
+	if _, ok := callee.(LoxCallable); !ok {
+		return nil, common.RuntimeError{HasError: true, Token: expr.Paren, Reason: "Can only call functions and classes"}
+	}
+	function := callee.(LoxCallable)
+	if function.Arity() != len(arguments) {
+		return nil, common.RuntimeError{HasError: true, Token: expr.Paren, Reason: "Expected " + strconv.Itoa(function.Arity()) + " arguments but got " + strconv.Itoa(len(arguments))}
+	}
+	return function.Call(i, arguments)
+}
+
 func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
 	var res interface{}
 	var err error
@@ -306,6 +334,12 @@ func (i *Interpreter) VisitExpressionStmt(stmt *ast.Expression) (interface{}, er
 	return nil, nil
 }
 
+func (i *Interpreter) VisitFunctionStmt(stmt *ast.Function) (interface{}, error) {
+	function := NewLoxFunction(stmt)
+	i.environment.Define(stmt.Name.Lexeme, function)
+	return nil, nil
+}
+
 func (i *Interpreter) VisitIfStmt(stmt *ast.If) (interface{}, error) {
 	var err error
 	var res interface{}
@@ -330,6 +364,18 @@ func (i *Interpreter) VisitPrintStmt(stmt *ast.Print) (interface{}, error) {
 		fmt.Println(i.stringify(value))
 	}
 	return nil, err
+}
+
+func (i *Interpreter) VisitReturnStmt(stmt *ast.Return) (interface{}, error) {
+	var value interface{}
+	var err error
+	if stmt.Value != nil {
+		value, err = i.evaluate(stmt.Value)
+		if err != nil {
+			return nil, nil
+		}
+	}
+	return value, err
 }
 
 func (i *Interpreter) VisitVarStmt(stmt *ast.Var) (interface{}, error) {

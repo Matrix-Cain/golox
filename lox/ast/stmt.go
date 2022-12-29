@@ -1,6 +1,6 @@
 package ast
 
-import "golox/lox/lexer"
+import . "golox/lox/lexer"
 
 type Stmt interface {
 	Accept(v StmtVisitor) (interface{}, error)
@@ -9,8 +9,10 @@ type Stmt interface {
 type StmtVisitor interface {
 	VisitBlockStmt(stmt *Block) (interface{}, error)
 	VisitExpressionStmt(stmt *Expression) (interface{}, error)
+	VisitFunctionStmt(stmt *Function) (interface{}, error)
 	VisitIfStmt(stmt *If) (interface{}, error)
 	VisitPrintStmt(stmt *Print) (interface{}, error)
+	VisitReturnStmt(stmt *Return) (interface{}, error)
 	VisitVarStmt(stmt *Var) (interface{}, error)
 	VisitWhileStmt(stmt *While) (interface{}, error)
 	VisitBreakStmt(stmt *Break) (interface{}, error)
@@ -33,6 +35,16 @@ func (t *Expression) Accept(v StmtVisitor) (interface{}, error) {
 	return v.VisitExpressionStmt(t)
 }
 
+type Function struct {
+	Name   Token
+	Params []Token
+	Body   []Stmt
+}
+
+func (t *Function) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitFunctionStmt(t)
+}
+
 type If struct {
 	Condition  Expr
 	ThenBranch Stmt
@@ -51,8 +63,17 @@ func (t *Print) Accept(v StmtVisitor) (interface{}, error) {
 	return v.VisitPrintStmt(t)
 }
 
+type Return struct {
+	KeyWord Token
+	Value   Expr
+}
+
+func (t *Return) Accept(v StmtVisitor) (interface{}, error) {
+	return v.VisitReturnStmt(t)
+}
+
 type Var struct {
-	Name        lexer.Token
+	Name        Token
 	Initializer Expr
 }
 

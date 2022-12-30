@@ -12,6 +12,7 @@ import (
 )
 
 type Interpreter struct {
+	global        *environment.Environment
 	environment   *environment.Environment
 	loopCnt       int
 	breakState    bool
@@ -19,7 +20,11 @@ type Interpreter struct {
 }
 
 func NewInterpreter() *Interpreter {
-	return &Interpreter{environment: environment.GetEnvironment()}
+	interpreter := &Interpreter{global: environment.GetEnvironment()}
+	interpreter.environment = interpreter.global
+
+	interpreter.global.Define("clock", &Clock{})
+	return interpreter
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
@@ -117,6 +122,10 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 	switch left.(type) {
 	case float64:
 		leftVal.Type = lexer.NUMBER
+	case int:
+		leftVal.Type = lexer.NUMBER
+	case int64:
+		leftVal.Type = lexer.NUMBER
 	case string:
 		leftVal.Type = lexer.STRING
 	case bool:
@@ -129,6 +138,10 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 
 	switch right.(type) {
 	case float64:
+		rightVal.Type = lexer.NUMBER
+	case int:
+		rightVal.Type = lexer.NUMBER
+	case int64:
 		rightVal.Type = lexer.NUMBER
 	case string:
 		rightVal.Type = lexer.STRING
@@ -174,7 +187,17 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return leftVal.Value.(float64) - rightVal.Value.(float64), nil
+		var leftFloat, rightFloat float64
+		var ok bool
+		if leftFloat, ok = utils.InterfaceToFloat64(leftVal.Value); ok {
+		} else {
+			return nil, common.RuntimeError{HasError: true, Reason: "cannot convert to float"}
+		}
+		if rightFloat, ok = utils.InterfaceToFloat64(rightVal.Value); ok {
+		} else {
+			return nil, common.RuntimeError{HasError: true, Reason: "cannot convert to float"}
+		}
+		return leftFloat - rightFloat, nil
 	case lexer.PLUS:
 		if leftVal.Type == lexer.STRING && rightVal.Type == lexer.NUMBER {
 			return leftVal.Value.(string) + strconv.FormatFloat(rightVal.Value.(float64), 'f', -1, 64), nil
@@ -189,7 +212,17 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 		}
 
 		if leftVal.Type == lexer.NUMBER && rightVal.Type == lexer.NUMBER {
-			return leftVal.Value.(float64) + rightVal.Value.(float64), nil
+			var leftFloat, rightFloat float64
+			var ok bool
+			if leftFloat, ok = utils.InterfaceToFloat64(leftVal.Value); ok {
+			} else {
+				return nil, common.RuntimeError{HasError: true, Reason: "cannot convert to float"}
+			}
+			if rightFloat, ok = utils.InterfaceToFloat64(rightVal.Value); ok {
+			} else {
+				return nil, common.RuntimeError{HasError: true, Reason: "cannot convert to float"}
+			}
+			return leftFloat + rightFloat, nil
 		}
 
 		return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "operands must be numbers or strings"}
@@ -208,6 +241,29 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 	}
 
 	return nil, common.RuntimeError{HasError: true, Token: expr.Operator, Reason: "Unexpected error: VisitBinaryExpr unreachable"}
+}
+
+func (i *Interpreter) VisitCallExpr(expr *ast.Call) (interface{}, error) {
+	callee, err := i.evaluate(expr.Callee)
+	if err != nil {
+		return nil, err
+	}
+	arguments := make([]interface{}, 0)
+	for _, argument := range expr.Arguments {
+		v, err := i.evaluate(argument)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, v)
+	}
+	if _, ok := callee.(LoxCallable); !ok {
+		return nil, common.RuntimeError{HasError: true, Token: expr.Paren, Reason: "Can only call functions and classes"}
+	}
+	function := callee.(LoxCallable)
+	if function.Arity() != len(arguments) {
+		return nil, common.RuntimeError{HasError: true, Token: expr.Paren, Reason: "Expected " + strconv.Itoa(function.Arity()) + " arguments but got " + strconv.Itoa(len(arguments))}
+	}
+	return function.Call(i, arguments)
 }
 
 func (i *Interpreter) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
@@ -261,6 +317,9 @@ func (i *Interpreter) executeBlock(statements []ast.Stmt, environment *environme
 		_, err := i.execute(statement)
 
 		if err != nil {
+			if v, ok := err.(*FuncReturn); ok {
+				return v.Value, nil
+			}
 			return nil, err
 		}
 
@@ -306,6 +365,16 @@ func (i *Interpreter) VisitExpressionStmt(stmt *ast.Expression) (interface{}, er
 	return nil, nil
 }
 
+func (i *Interpreter) VisitFunctionStmt(stmt *ast.Function) (interface{}, error) {
+	function := NewLoxFunction(&ast.FunctionExpr{Params: stmt.Params, Body: stmt.Body}, i.environment, stmt.Name.Lexeme)
+	i.environment.Define(stmt.Name.Lexeme, function)
+	return nil, nil
+}
+
+func (i *Interpreter) VisitFunctionExpr(expr *ast.FunctionExpr) (interface{}, error) {
+	return NewLoxFunction(expr, i.environment, ""), nil
+}
+
 func (i *Interpreter) VisitIfStmt(stmt *ast.If) (interface{}, error) {
 	var err error
 	var res interface{}
@@ -315,7 +384,7 @@ func (i *Interpreter) VisitIfStmt(stmt *ast.If) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	} else if stmt.ElseBranch != nil { // Fix: elseBranch is optional
 		_, err = i.execute(stmt.ElseBranch)
 		if err != nil {
 			return nil, err
@@ -330,6 +399,18 @@ func (i *Interpreter) VisitPrintStmt(stmt *ast.Print) (interface{}, error) {
 		fmt.Println(i.stringify(value))
 	}
 	return nil, err
+}
+
+func (i *Interpreter) VisitReturnStmt(stmt *ast.Return) (interface{}, error) {
+	var value interface{}
+	var err error
+	if stmt.Value != nil {
+		value, err = i.evaluate(stmt.Value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, &FuncReturn{Value: value}
 }
 
 func (i *Interpreter) VisitVarStmt(stmt *ast.Var) (interface{}, error) {
@@ -434,7 +515,7 @@ func (i *Interpreter) checkNumberOperands(operator lexer.Token, operandLeft ast.
 	return common.RuntimeError{HasError: true, Token: operator, Reason: "operand must be a number"}
 }
 
-func (i *Interpreter) stringify(object interface{}) string {
+func (i *Interpreter) stringify(object interface{}) interface{} {
 	if object == nil {
 		return "nil"
 	}
@@ -449,5 +530,14 @@ func (i *Interpreter) stringify(object interface{}) string {
 	if v, ok := object.(string); ok {
 		return v
 	}
-	return ""
+	if v, ok := object.(int64); ok {
+		text := strconv.FormatInt(v, 10)
+		return text
+	}
+	if v, ok := object.(int); ok {
+		text := strconv.Itoa(v)
+		return text
+	}
+
+	return object
 }

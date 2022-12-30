@@ -8,6 +8,7 @@ type Expr interface {
 
 type Visitor interface {
 	VisitBinaryExpr(expr *Binary) (interface{}, error)
+	VisitCallExpr(expr *Call) (interface{}, error)
 	VisitGroupingExpr(expr *Grouping) (interface{}, error)
 	VisitLiteralExpr(expr *Literal) (interface{}, error)
 	VisitLogicalExpr(expr *Logical) (interface{}, error)
@@ -15,6 +16,7 @@ type Visitor interface {
 	VisitVariableExpr(expr *Variable) (interface{}, error)
 	VisitAssignExpr(expr *Assign) (interface{}, error)
 	VisitTernaryExpr(expr *Ternary) (interface{}, error)
+	VisitFunctionExpr(expr *FunctionExpr) (interface{}, error)
 }
 
 type Binary struct {
@@ -25,6 +27,25 @@ type Binary struct {
 
 func (t *Binary) Accept(v Visitor) (interface{}, error) {
 	return v.VisitBinaryExpr(t)
+}
+
+type Call struct {
+	Callee    Expr
+	Paren     Token
+	Arguments []Expr
+}
+
+func (t *Call) Accept(v Visitor) (interface{}, error) {
+	return v.VisitCallExpr(t)
+}
+
+type FunctionExpr struct {
+	Params []Token
+	Body   []Stmt
+}
+
+func (t *FunctionExpr) Accept(v Visitor) (interface{}, error) {
+	return v.VisitFunctionExpr(t)
 }
 
 type Grouping struct {

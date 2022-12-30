@@ -35,6 +35,10 @@ func (p *Parser) Parse() ([]ast.Stmt, ParseError) {
 }
 
 func (p *Parser) declaration() (ast.Stmt, error) {
+	if p.check(lexer.FUN) && p.checkNext(lexer.IDENTIFIER) {
+		_, _ = p.Consume(lexer.FUN, "")
+		return p.function("function")
+	}
 	if p.match(lexer.VAR) {
 		stmt, err := p.varDeclaration()
 		if err != nil {
@@ -60,6 +64,9 @@ func (p *Parser) statement() (ast.Stmt, error) {
 	}
 	if p.match(lexer.PRINT) {
 		return p.printStatement()
+	}
+	if p.match(lexer.RETURN) {
+		return p.returnStatement()
 	}
 	if p.match(lexer.WHILE) {
 		return p.whileStatement()
@@ -156,6 +163,23 @@ func (p *Parser) printStatement() (ast.Stmt, error) {
 	return &ast.Print{Expression: value}, err
 }
 
+func (p *Parser) returnStatement() (ast.Stmt, error) {
+	keyword := p.previous()
+	var value ast.Expr
+	var err error
+	if !p.check(lexer.SEMICOLON) {
+		value, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after return value")
+	if err != nil {
+		return nil, err
+	}
+	return &ast.Return{KeyWord: keyword, Value: value}, nil
+}
+
 func (p *Parser) varDeclaration() (ast.Stmt, error) {
 	name, err := p.Consume(lexer.IDENTIFIER, "Expect variable name")
 	if err != nil {
@@ -191,6 +215,55 @@ func (p *Parser) expressionStatement() (ast.Stmt, error) {
 	expr, err := p.expression()
 	_, err = p.Consume(lexer.SEMICOLON, "Expect ';' after expression")
 	return &ast.Expression{Expression: expr}, err
+}
+
+func (p *Parser) function(kind string) (ast.Stmt, error) {
+	funcName, err := p.Consume(lexer.IDENTIFIER, "Expect "+kind+" name")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.functionBody(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.Function{Name: funcName, Params: body.(*ast.FunctionExpr).Params, Body: body.(*ast.FunctionExpr).Body}, nil
+}
+
+func (p *Parser) functionBody(kind string) (ast.Expr, error) {
+	var err error
+	_, err = p.Consume(lexer.LEFT_PAREN, "Expect '(' before parameter(s)")
+	parameters := make([]lexer.Token, 0)
+	if !p.check(lexer.RIGHT_PAREN) {
+		paramNameTmp, err := p.Consume(lexer.IDENTIFIER, "Expect parameter name")
+		if err != nil {
+			return nil, err
+		}
+		parameters = append(parameters, paramNameTmp)
+		for p.match(lexer.COMMA) {
+			paramName, err := p.Consume(lexer.IDENTIFIER, "Expect parameter name")
+			if err != nil {
+				return nil, err
+			}
+			if len(parameters) >= 255 {
+				return nil, p.raiseError(paramName, "Can't have more than 255 parameters")
+			}
+			parameters = append(parameters, paramName)
+		}
+	}
+	_, err = p.Consume(lexer.RIGHT_PAREN, "Expect ')' after parameter(s)")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.Consume(lexer.LEFT_BRACE, "Expect '{' before "+kind+" body")
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.block()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.FunctionExpr{Body: body, Params: parameters}, nil
 }
 
 func (p *Parser) block() ([]ast.Stmt, error) {
@@ -339,7 +412,54 @@ func (p *Parser) unary() (ast.Expr, error) {
 		right, err := p.unary()
 		return &ast.Unary{Operator: operator, Right: right}, err
 	}
-	return p.primary()
+	return p.call()
+}
+
+func (p *Parser) call() (ast.Expr, error) {
+	var expr ast.Expr
+	var err error
+	expr, err = p.primary()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		if p.match(lexer.LEFT_PAREN) {
+			expr, err = p.finishCall(expr)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+	return expr, nil
+}
+
+func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
+	arguments := make([]ast.Expr, 0)
+	if !p.check(lexer.RIGHT_PAREN) {
+		expr, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, expr)
+
+		for p.match(lexer.COMMA) {
+			expr, err := p.expression()
+			if err != nil {
+				return nil, err
+			}
+			if len(arguments) >= 255 {
+				return nil, p.raiseError(p.peek(), "Can't have more than 255 arguments")
+			}
+			arguments = append(arguments, expr)
+		}
+	}
+	paren, err := p.Consume(lexer.RIGHT_PAREN, "Expect ')' after arguments")
+	if err != nil {
+		return nil, err
+	}
+	return &ast.Call{Callee: callee, Paren: paren, Arguments: arguments}, nil
 }
 
 func (p *Parser) primary() (ast.Expr, error) {
@@ -366,6 +486,14 @@ func (p *Parser) primary() (ast.Expr, error) {
 	if p.match(lexer.BANG_EQUAL, lexer.EQUAL_EQUAL, lexer.GREATER_EQUAL, lexer.GREATER, lexer.LESS, lexer.LESS_EQUAL, lexer.PLUS, lexer.SLASH, lexer.STAR) {
 		return nil, p.raiseError(p.previous(), "Missing Left Hand Operand")
 	}
+	if p.match(lexer.FUN) {
+		body, err := p.functionBody("function")
+		if err != nil {
+			return nil, err
+		}
+		return body.(*ast.FunctionExpr), nil
+	}
+
 	return nil, p.raiseError(p.peek(), "Expect expression.")
 }
 
@@ -442,4 +570,14 @@ func (p *Parser) peek() lexer.Token {
 
 func (p *Parser) previous() lexer.Token {
 	return p.tokens[p.current-1]
+}
+
+func (p *Parser) checkNext(tokenType lexer.TokenType) bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.tokens[p.current+1].Type0 == lexer.EOF {
+		return false
+	}
+	return p.tokens[p.current+1].Type0 == tokenType
 }

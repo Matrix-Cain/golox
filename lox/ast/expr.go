@@ -16,6 +16,7 @@ type Visitor interface {
 	VisitVariableExpr(expr *Variable) (interface{}, error)
 	VisitAssignExpr(expr *Assign) (interface{}, error)
 	VisitTernaryExpr(expr *Ternary) (interface{}, error)
+	VisitFunctionExpr(expr *FunctionExpr) (interface{}, error)
 }
 
 type Binary struct {
@@ -36,6 +37,15 @@ type Call struct {
 
 func (t *Call) Accept(v Visitor) (interface{}, error) {
 	return v.VisitCallExpr(t)
+}
+
+type FunctionExpr struct {
+	Params []Token
+	Body   []Stmt
+}
+
+func (t *FunctionExpr) Accept(v Visitor) (interface{}, error) {
+	return v.VisitFunctionExpr(t)
 }
 
 type Grouping struct {

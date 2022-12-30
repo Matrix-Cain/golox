@@ -35,7 +35,8 @@ func (p *Parser) Parse() ([]ast.Stmt, ParseError) {
 }
 
 func (p *Parser) declaration() (ast.Stmt, error) {
-	if p.match(lexer.FUN) {
+	if p.check(lexer.FUN) && p.checkNext(lexer.IDENTIFIER) {
+		_, _ = p.Consume(lexer.FUN, "")
 		return p.function("function")
 	}
 	if p.match(lexer.VAR) {
@@ -221,17 +222,26 @@ func (p *Parser) function(kind string) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	body, err := p.functionBody(kind)
+	if err != nil {
+		return nil, err
+	}
 
+	return &ast.Function{Name: funcName, Params: body.(*ast.FunctionExpr).Params, Body: body.(*ast.FunctionExpr).Body}, nil
+}
+
+func (p *Parser) functionBody(kind string) (ast.Expr, error) {
+	var err error
 	_, err = p.Consume(lexer.LEFT_PAREN, "Expect '(' before parameter(s)")
 	parameters := make([]lexer.Token, 0)
 	if !p.check(lexer.RIGHT_PAREN) {
-		paramNameTmp, err := p.Consume(lexer.IDENTIFIER, "Expect "+kind+" name")
+		paramNameTmp, err := p.Consume(lexer.IDENTIFIER, "Expect parameter name")
 		if err != nil {
 			return nil, err
 		}
 		parameters = append(parameters, paramNameTmp)
 		for p.match(lexer.COMMA) {
-			paramName, err := p.Consume(lexer.IDENTIFIER, "Expect "+kind+" name")
+			paramName, err := p.Consume(lexer.IDENTIFIER, "Expect parameter name")
 			if err != nil {
 				return nil, err
 			}
@@ -253,7 +263,7 @@ func (p *Parser) function(kind string) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ast.Function{Name: funcName, Params: parameters, Body: body}, nil
+	return &ast.FunctionExpr{Body: body, Params: parameters}, nil
 }
 
 func (p *Parser) block() ([]ast.Stmt, error) {
@@ -476,6 +486,14 @@ func (p *Parser) primary() (ast.Expr, error) {
 	if p.match(lexer.BANG_EQUAL, lexer.EQUAL_EQUAL, lexer.GREATER_EQUAL, lexer.GREATER, lexer.LESS, lexer.LESS_EQUAL, lexer.PLUS, lexer.SLASH, lexer.STAR) {
 		return nil, p.raiseError(p.previous(), "Missing Left Hand Operand")
 	}
+	if p.match(lexer.FUN) {
+		body, err := p.functionBody("function")
+		if err != nil {
+			return nil, err
+		}
+		return body.(*ast.FunctionExpr), nil
+	}
+
 	return nil, p.raiseError(p.peek(), "Expect expression.")
 }
 
@@ -552,4 +570,14 @@ func (p *Parser) peek() lexer.Token {
 
 func (p *Parser) previous() lexer.Token {
 	return p.tokens[p.current-1]
+}
+
+func (p *Parser) checkNext(tokenType lexer.TokenType) bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.tokens[p.current+1].Type0 == lexer.EOF {
+		return false
+	}
+	return p.tokens[p.current+1].Type0 == tokenType
 }

@@ -10,7 +10,7 @@ func (t *Clock) Arity() int {
 }
 
 func (t *Clock) Call(interpreter *Interpreter, arguments []interface{}) (interface{}, error) {
-	return time.Now().UnixMilli() / 1000, nil
+	return time.Now().UnixMicro(), nil
 }
 
 func (t *Clock) String() string {

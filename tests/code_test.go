@@ -190,18 +190,88 @@ sayHi("Dear", "Reader");
 
 func TestBasicWithReturnFunc(t *testing.T) {
 	snippet := `
+var start = clock();
 fun fib(n) {
   if (n <= 1) return n;
   return fib(n - 2) + fib(n - 1);
 }
 
-for (var i = 0; i < 20; i = i + 1) {
+for (var i = 0; i < 3; i = i + 1) {
   print fib(i);
 }
+var end = clock();
+print "程序执行用时: " + (end-start) + "μs";
 `
 	vm := &VM.VM{}
 	vm.RunStr(snippet)
 
+}
+
+func TestClosure(t *testing.T) {
+	snippet := `
+	fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestAnonymousFunction(t *testing.T) {
+	snippet := `
+fun thrice(fn) {
+  for (var i = 1; i <= 3; i = i + 1) {
+    fn(i);
+  }
+}
+
+thrice(fun (a) {
+  print a;
+});
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestAnonymousFunction1(t *testing.T) {
+	snippet := `
+
+fun () {
+  print "ok";
+}();
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
+}
+
+func TestPrintFuncName(t *testing.T) {
+	snippet := `
+fun whichFn(fn) {
+  print fn;
+}
+
+whichFn(fun (b) {
+ print b;
+});
+
+fun named(a) { print a; }
+whichFn(named);
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
 }
 
 /* no `;` at end of line */
@@ -212,9 +282,23 @@ comment
 */
 var a = "你好世界！!";
 a = "我是练习时长两年半的练习生";
-print a;
+print a
 a=2; // no
 print a;`
 	vm := &VM.VM{}
 	vm.RunStr(snippet)
+}
+
+func TestMismatchFuncArgumentsNumber(t *testing.T) {
+	snippet := `
+fun sayHi(first, last) {
+  print "Hi, " + first + " " + last + "!";
+}
+sayHi("Dear", "Reader", "Too many");
+sayHi("Too little");
+
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+
 }

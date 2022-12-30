@@ -6,15 +6,17 @@ import (
 )
 
 type LoxFunction struct {
-	Declaration *ast.Function
+	Declaration *ast.FunctionExpr
+	Name        string
+	Closure     *environment.Environment
 }
 
-func NewLoxFunction(declaration *ast.Function) *LoxFunction {
-	return &LoxFunction{Declaration: declaration}
+func NewLoxFunction(declaration *ast.FunctionExpr, closure *environment.Environment, name string) *LoxFunction {
+	return &LoxFunction{Declaration: declaration, Closure: closure, Name: name}
 }
 
 func (t *LoxFunction) Call(interpreter *Interpreter, arguments []interface{}) (interface{}, error) {
-	localEnvironment := environment.GetEnclosingEnvironment(interpreter.global)
+	localEnvironment := environment.GetEnclosingEnvironment(t.Closure)
 	for index, argument := range t.Declaration.Params {
 		localEnvironment.Define(argument.Lexeme, arguments[index])
 	}
@@ -27,5 +29,14 @@ func (t *LoxFunction) Arity() int {
 }
 
 func (t *LoxFunction) String() string {
-	return "<fn " + t.Declaration.Name.Lexeme + ">"
+	if t.Name == "" {
+		return "<fn anonymous>"
+	}
+	return "<fn " + t.Name + ">"
 }
+
+type FuncReturn struct {
+	Value interface{}
+}
+
+func (r FuncReturn) Error() string { return "" }

@@ -14,6 +14,7 @@ import (
 type Interpreter struct {
 	global        *environment.Environment
 	environment   *environment.Environment
+	locals        map[ast.Expr]int
 	loopCnt       int
 	breakState    bool
 	continueState bool
@@ -25,6 +26,10 @@ func NewInterpreter() *Interpreter {
 
 	interpreter.global.Define("clock", &Clock{})
 	return interpreter
+}
+
+func (i *Interpreter) Resolve(expr ast.Expr, depth int) {
+	i.locals[expr] = depth
 }
 
 func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
@@ -46,6 +51,15 @@ func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
 	//}
 	//fmt.Println(i.stringify(value))
 	return common.RuntimeError{HasError: false}
+}
+
+func (i *Interpreter) lookUpVariable(name lexer.Token, expr ast.Expr) (interface{}, error) {
+
+	if distance, ok := i.locals[expr]; ok {
+		return i.environment.GetAt(distance, name.Lexeme)
+	} else {
+		return i.global.Get(name)
+	}
 }
 
 func (i *Interpreter) VisitLiteralExpr(expr *ast.Literal) (interface{}, error) {
@@ -106,7 +120,7 @@ func (i *Interpreter) VisitUnaryExpr(expr *ast.Unary) (interface{}, error) {
 }
 
 func (i *Interpreter) VisitVariableExpr(expr *ast.Variable) (interface{}, error) {
-	return i.environment.Get(expr.Name)
+	return i.lookUpVariable(expr.Name, expr)
 }
 
 func (i *Interpreter) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {

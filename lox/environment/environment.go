@@ -29,6 +29,10 @@ func (e *Environment) Get(name lexer.Token) (interface{}, error) {
 	return nil, common.RuntimeError{HasError: true, Token: name, Reason: "Undefined variable '" + name.Lexeme + "'"}
 }
 
+func (e *Environment) GetAt(distance int, name string) interface{} {
+	return e.ancestor(distance)[name]
+}
+
 func (e *Environment) Define(name string, value interface{}) {
 	e.values[name] = value
 }

@@ -274,6 +274,23 @@ whichFn(named);
 	vm.RunStr(snippet)
 }
 
+func TestClosureWithVar(t *testing.T) {
+	snippet := `
+var a = "global";
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
+}
+`
+	vm := &VM.VM{}
+	vm.RunStr(snippet)
+}
+
 /* no `;` at end of line */
 func TestMalformedCodeSnippet1(t *testing.T) {
 	snippet := `// Your first Lox program!

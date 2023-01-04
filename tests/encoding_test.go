@@ -30,8 +30,5 @@ func TestFor(t *testing.T) {
 }
 
 func TestBreak(t *testing.T) {
-	for 1 < 2 {
-		break
-	}
 
 }

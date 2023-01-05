@@ -30,7 +30,11 @@ func (e *Environment) Get(name lexer.Token) (interface{}, error) {
 }
 
 func (e *Environment) GetAt(distance int, name string) interface{} {
-	return e.ancestor(distance)[name]
+	return e.ancestor(distance).values[name]
+}
+
+func (e *Environment) AssignAt(distance int, name lexer.Token, value interface{}) {
+	e.ancestor(distance).values[name.Lexeme] = value
 }
 
 func (e *Environment) Define(name string, value interface{}) {
@@ -47,4 +51,12 @@ func (e *Environment) Assign(name lexer.Token, value interface{}) error {
 		return e.enclosing.Assign(name, value)
 	}
 	return common.RuntimeError{HasError: true, Token: name, Reason: "Undefined variable '" + name.Lexeme + "'"}
+}
+
+func (e *Environment) ancestor(distance int) *Environment {
+	current := e
+	for i := 0; i < distance; i++ {
+		current = current.enclosing
+	}
+	return current
 }

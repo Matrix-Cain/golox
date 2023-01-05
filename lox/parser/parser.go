@@ -129,9 +129,6 @@ func (p *Parser) forStatement() (ast.Stmt, error) {
 		return nil, err
 	}
 
-	if incremental != nil {
-		body = &ast.Block{Statements: []ast.Stmt{body}}
-	}
 	if condition == nil {
 		condition = &ast.Literal{Type: lexer.TRUE, Value: true}
 	}

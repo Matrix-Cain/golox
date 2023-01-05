@@ -8,13 +8,44 @@ import (
 	"golox/utils"
 )
 
+type functionType int
+
+const (
+	NONE = iota
+	FUNCTION
+)
+
 type Resolver struct {
-	interpreter interpreter.Interpreter
-	scopes      []map[string]bool
+	interpreter     *interpreter.Interpreter
+	scopes          []map[string]bool
+	currentFunction functionType
+}
+
+func NewResolver(interpreter *interpreter.Interpreter) *Resolver {
+	return &Resolver{interpreter: interpreter, scopes: make([]map[string]bool, 0), currentFunction: NONE}
+}
+
+func (i *Resolver) Resolve(obj interface{}) (interface{}, error) {
+	switch v := obj.(type) {
+	case []ast.Stmt:
+		for _, statement := range v {
+			_, err := i.Resolve(statement)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	case ast.Stmt:
+		return v.Accept(i)
+	case ast.Expr:
+		return v.Accept(i)
+	}
+	utils.Report(-1, "Resolver#Resolve", "Impossible code reached")
+	return nil, errors.New("impossible code reached")
 }
 
 func (i *Resolver) VisitExpressionStmt(stmt *ast.Expression) (interface{}, error) {
-	_, err := i.resolve(stmt.Expression)
+	_, err := i.Resolve(stmt.Expression)
 	if err != nil {
 		return nil, err
 	}
@@ -23,16 +54,16 @@ func (i *Resolver) VisitExpressionStmt(stmt *ast.Expression) (interface{}, error
 
 func (i *Resolver) VisitIfStmt(stmt *ast.If) (interface{}, error) {
 	var err error
-	_, err = i.resolve(stmt.Condition)
+	_, err = i.Resolve(stmt.Condition)
 	if err != nil {
 		return nil, err
 	}
-	_, err = i.resolve(stmt.ThenBranch)
+	_, err = i.Resolve(stmt.ThenBranch)
 	if err != nil {
 		return nil, err
 	}
 	if stmt.ElseBranch != nil {
-		_, err = i.resolve(stmt.ThenBranch)
+		_, err = i.Resolve(stmt.ThenBranch)
 		if err != nil {
 			return nil, err
 		}
@@ -41,24 +72,34 @@ func (i *Resolver) VisitIfStmt(stmt *ast.If) (interface{}, error) {
 }
 
 func (i *Resolver) VisitPrintStmt(stmt *ast.Print) (interface{}, error) {
-	_, err := i.resolve(stmt.Expression)
+	_, err := i.Resolve(stmt.Expression)
 	return nil, err
 }
 
 func (i *Resolver) VisitReturnStmt(stmt *ast.Return) (interface{}, error) {
+	if i.currentFunction == NONE {
+		utils.Report(stmt.KeyWord.Line, "Resolver#VisitReturnStmt ", "`return` in top code")
+	}
 	if stmt.Value != nil {
-		_, err := i.resolve(stmt.Value)
+		_, err := i.Resolve(stmt.Value)
 		return nil, err
 	}
 	return nil, nil
 }
 
 func (i *Resolver) VisitWhileStmt(stmt *ast.While) (interface{}, error) {
-	_, err := i.resolve(stmt.Condition)
+	_, err := i.Resolve(stmt.Condition)
 	if err != nil {
 		return nil, err
 	}
-	_, err = i.resolve(stmt.Body)
+
+	if stmt.OptionalMutate != nil { // optionalMutate is not guaranteed to be present
+		_, err = i.Resolve(stmt.OptionalMutate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = i.Resolve(stmt.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -74,11 +115,11 @@ func (i *Resolver) VisitContinueStmt(_ *ast.Continue) (interface{}, error) {
 }
 
 func (i *Resolver) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
-	_, err := i.resolve(expr.Left)
+	_, err := i.Resolve(expr.Left)
 	if err != nil {
 		return nil, err
 	}
-	_, err = i.resolve(expr.Right)
+	_, err = i.Resolve(expr.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +127,12 @@ func (i *Resolver) VisitBinaryExpr(expr *ast.Binary) (interface{}, error) {
 }
 
 func (i *Resolver) VisitCallExpr(expr *ast.Call) (interface{}, error) {
-	_, err := i.resolve(expr.Callee)
+	_, err := i.Resolve(expr.Callee)
 	if err != nil {
 		return nil, err
 	}
 	for _, argument := range expr.Arguments {
-		_, err = i.resolve(argument)
+		_, err = i.Resolve(argument)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +141,7 @@ func (i *Resolver) VisitCallExpr(expr *ast.Call) (interface{}, error) {
 }
 
 func (i *Resolver) VisitGroupingExpr(expr *ast.Grouping) (interface{}, error) {
-	_, err := i.resolve(expr.Expression)
+	_, err := i.Resolve(expr.Expression)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +153,11 @@ func (i *Resolver) VisitLiteralExpr(_ *ast.Literal) (interface{}, error) {
 }
 
 func (i *Resolver) VisitLogicalExpr(expr *ast.Logical) (interface{}, error) {
-	_, err := i.resolve(expr.Left)
+	_, err := i.Resolve(expr.Left)
 	if err != nil {
 		return nil, err
 	}
-	_, err = i.resolve(expr.Right)
+	_, err = i.Resolve(expr.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -124,12 +165,12 @@ func (i *Resolver) VisitLogicalExpr(expr *ast.Logical) (interface{}, error) {
 }
 
 func (i *Resolver) VisitUnaryExpr(expr *ast.Unary) (interface{}, error) {
-	_, err := i.resolve(expr.Right)
+	_, err := i.Resolve(expr.Right)
 	return nil, err
 }
 
 func (i *Resolver) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
-	_, err := i.resolve(expr.Value)
+	_, err := i.Resolve(expr.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -141,16 +182,16 @@ func (i *Resolver) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
 }
 
 func (i *Resolver) VisitTernaryExpr(expr *ast.Ternary) (interface{}, error) {
-	_, err := i.resolve(expr.ConditionalExpr)
+	_, err := i.Resolve(expr.ConditionalExpr)
 	if err != nil {
 		return nil, err
 	}
-	_, err = i.resolve(expr.ElseExpr)
+	_, err = i.Resolve(expr.ElseExpr)
 	if err != nil {
 		return nil, err
 	}
 	if expr.ThenExpr != nil {
-		_, err = i.resolve(expr.ThenExpr)
+		_, err = i.Resolve(expr.ThenExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +205,7 @@ func (i *Resolver) VisitFunctionExpr(expr *ast.FunctionExpr) (interface{}, error
 		i.declare(param)
 		i.define(param)
 	}
-	_, err := i.resolve(expr.Body)
+	_, err := i.Resolve(expr.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +213,9 @@ func (i *Resolver) VisitFunctionExpr(expr *ast.FunctionExpr) (interface{}, error
 	return nil, nil
 }
 
-func NewResolver(interpreter interpreter.Interpreter) *Resolver {
-	return &Resolver{interpreter: interpreter}
-}
-
 func (i *Resolver) VisitBlockStmt(stmt *ast.Block) (interface{}, error) {
 	i.beginScope()
-	_, err := i.resolve(stmt.Statements)
+	_, err := i.Resolve(stmt.Statements)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +226,7 @@ func (i *Resolver) VisitBlockStmt(stmt *ast.Block) (interface{}, error) {
 func (i *Resolver) VisitVarStmt(stmt *ast.Var) (interface{}, error) {
 	i.declare(stmt.Name)
 	if stmt.Initializer != nil {
-		_, err := i.resolve(stmt.Initializer)
+		_, err := i.Resolve(stmt.Initializer)
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +238,7 @@ func (i *Resolver) VisitVarStmt(stmt *ast.Var) (interface{}, error) {
 func (i *Resolver) VisitVariableExpr(expr *ast.Variable) (interface{}, error) {
 	if len(i.scopes) > 0 {
 		scope := i.scopes[len(i.scopes)-1]
-		if ok, v := scope[expr.Name.Lexeme]; ok {
+		if v, ok := scope[expr.Name.Lexeme]; ok {
 			if !v {
 				utils.Report(expr.Name.Line, "Resolver", "Can't read local variable in its own initializer")
 			}
@@ -217,49 +254,35 @@ func (i *Resolver) VisitVariableExpr(expr *ast.Variable) (interface{}, error) {
 func (i *Resolver) VisitFunctionStmt(stmt *ast.Function) (interface{}, error) {
 	i.declare(stmt.Name)
 	i.define(stmt.Name)
-	_, err := i.resolveFunction(stmt)
+	_, err := i.resolveFunction(stmt, FUNCTION)
 	if err != nil {
 		return nil, err
 	}
 	return nil, nil
 }
 
-func (i *Resolver) resolve(obj interface{}) (interface{}, error) {
-	switch v := obj.(type) {
-	case []ast.Stmt:
-		for _, statement := range v {
-			_, err := i.resolve(statement)
-			if err != nil {
-				return nil, err
-			}
-		}
-	case ast.Stmt:
-		return v.Accept(i)
-	case ast.Expr:
-		return v.Accept(i)
-	}
-	utils.Report(-1, "Resolver#resolve", "Impossible code reached")
-	return nil, errors.New("impossible code reached")
-}
-
-func (i *Resolver) resolveFunction(function *ast.Function) (interface{}, error) {
+func (i *Resolver) resolveFunction(function *ast.Function, functionType0 functionType) (interface{}, error) {
+	enclosingFunction := i.currentFunction
+	i.currentFunction = functionType0
 	i.beginScope()
 	for _, param := range function.Params {
 		i.declare(param)
 		i.define(param)
 	}
-	_, err := i.resolve(function.Body)
+	_, err := i.Resolve(function.Body)
 	if err != nil {
 		return nil, err
 	}
 	i.endScope()
+	i.currentFunction = enclosingFunction
 	return nil, nil
 }
 
 func (i *Resolver) resolveLocal(expr ast.Expr, name lexer.Token) (interface{}, error) {
 	for index := len(i.scopes) - 1; index >= 0; index-- {
-		if ok, _ := i.scopes[index][name.Lexeme]; ok {
+		if _, ok := i.scopes[index][name.Lexeme]; ok {
 			i.interpreter.Resolve(expr, len(i.scopes)-1-index)
+			return nil, nil
 		}
 	}
 	return nil, nil
@@ -278,6 +301,9 @@ func (i *Resolver) declare(name lexer.Token) {
 		return
 	}
 	scope := i.scopes[len(i.scopes)-1]
+	if _, ok := scope[name.Lexeme]; ok {
+		utils.Report(name.Line, "Resolver#declare ", "Multiple definition")
+	}
 	scope[name.Lexeme] = false
 	i.scopes[len(i.scopes)-1] = scope
 

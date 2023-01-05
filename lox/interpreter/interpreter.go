@@ -23,6 +23,7 @@ type Interpreter struct {
 func NewInterpreter() *Interpreter {
 	interpreter := &Interpreter{global: environment.GetEnvironment()}
 	interpreter.environment = interpreter.global
+	interpreter.locals = make(map[ast.Expr]int, 0)
 
 	interpreter.global.Define("clock", &Clock{})
 	return interpreter
@@ -54,11 +55,12 @@ func (i *Interpreter) Interpret(statements []ast.Stmt) common.RuntimeError {
 }
 
 func (i *Interpreter) lookUpVariable(name lexer.Token, expr ast.Expr) (interface{}, error) {
-
 	if distance, ok := i.locals[expr]; ok {
-		return i.environment.GetAt(distance, name.Lexeme)
+		val := i.environment.GetAt(distance, name.Lexeme)
+		return val, nil
 	} else {
-		return i.global.Get(name)
+		val, err := i.global.Get(name)
+		return val, err
 	}
 }
 
@@ -353,7 +355,7 @@ func (i *Interpreter) VisitBlockStmt(stmt *ast.Block) (interface{}, error) {
 	return nil, nil
 }
 
-func (i *Interpreter) VisitBreakStmt(stmt *ast.Break) (interface{}, error) {
+func (i *Interpreter) VisitBreakStmt(_ *ast.Break) (interface{}, error) {
 	if i.loopCnt > 0 {
 		i.breakState = true
 	} else {
@@ -362,7 +364,7 @@ func (i *Interpreter) VisitBreakStmt(stmt *ast.Break) (interface{}, error) {
 	return nil, nil
 }
 
-func (i *Interpreter) VisitContinueStmt(stmt *ast.Continue) (interface{}, error) {
+func (i *Interpreter) VisitContinueStmt(_ *ast.Continue) (interface{}, error) {
 	if i.loopCnt > 0 {
 		i.continueState = true
 	} else {
@@ -481,13 +483,18 @@ func (i *Interpreter) VisitWhileStmt(stmt *ast.While) (interface{}, error) {
 
 func (i *Interpreter) VisitAssignExpr(expr *ast.Assign) (interface{}, error) {
 	value, err := i.evaluate(expr.Value)
-	if err == nil {
-		err := i.environment.Assign(expr.Name, value)
+	if err != nil {
+		return nil, err
+	}
+	if distance, ok := i.locals[expr]; ok {
+		i.environment.AssignAt(distance, expr.Name, value)
+	} else {
+		err := i.global.Assign(expr.Name, value)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return nil, err
+	return value, nil
 
 }
 

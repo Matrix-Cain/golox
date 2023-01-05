@@ -6,6 +6,7 @@ import (
 	"golox/lox/interpreter"
 	"golox/lox/lexer"
 	"golox/lox/parser"
+	"golox/lox/resolver"
 	"golox/utils"
 	"os"
 )
@@ -15,6 +16,7 @@ type VM struct {
 	hadRuntimeError bool
 	vmLexer         *lexer.Lexer
 	vmParser        *parser.Parser
+	vmResolver      *resolver.Resolver
 	vmInterpreter   *interpreter.Interpreter
 }
 
@@ -77,6 +79,16 @@ func (v *VM) run(source string) {
 	}
 
 	v.vmInterpreter = interpreter.NewInterpreter()
+	v.vmResolver = resolver.NewResolver(v.vmInterpreter)
+
+	_, err := v.vmResolver.Resolve(statements)
+	if err != nil {
+		v.hadError = true
+	}
+	if v.hadError {
+		return
+	}
+
 	runtimeError := v.vmInterpreter.Interpret(statements)
 
 	if runtimeError.HasError {
